@@ -8,11 +8,9 @@ def spark_handler(post_data, message):
     token = 'YOUR UMBRELLA SECURITY TOKEN'
 
     # Get the last value and see if its fake news. 
-
-    # Get the last value and see if its fake news. 
     d = message.text.split(" ")[-1] 
     spark.messages.create(roomId=room_id, text="Checking on domain: " + d + "...")
-    spark.messages.create(roomId=room_id, text=check_fake_news(token, message.text.split(" ")[-1]))
+    spark.messages.create(roomId=room_id, text=check_fake_news(token, d))
 
 # get our database of fake news sites.
 def fakenews_get():
@@ -76,8 +74,6 @@ def get_domain_whois(token, domain):
 def get_domains_by_email(token, email):
     ok, response =  umbrella_get(token, "/whois/emails/" + email)
     return ok, response
-
-
 
 # below we gather scores by parsing the data from the investigate primatives. 
 def score_from_categories(token, domain):
@@ -146,8 +142,6 @@ def score_from_security(token, domain):
     if page_rank < 3:
         return ok, 10
     return ok, 0
-    
-
  
 # check_fake_news takes API token and a website.  The algorithm is pretty
 # crude and can be modified by you.  
@@ -177,16 +171,3 @@ def check_fake_news(token, domain):
     else:
         msg  = "%s has a %%%.2f probability of being a fake news site" % (domain, ((float(score) / float(100)) * 100))
     return msg
-
-## for testing, not required for code. 
-import sys 
-import json
-import os
-token = os.environ.get('UMBRELLA_TOKEN')
-if token == None:
-    print "please define UMBRELLA_TOKEN environment variable"
-    sys.exit(1)
-if len(sys.argv) > 1:
-    print check_fake_news(token, sys.argv[1])
-else:
-    print "Please call this program with a domain"
