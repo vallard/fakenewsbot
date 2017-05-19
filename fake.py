@@ -29,6 +29,11 @@ def umbrella_get(token, path):
             return False, url + " doesn't seem to exist."
     return True, json.loads(fh.read())
 
+# get all kinds of security info for this domain.  So much!
+# https://docs.umbrella.com/developer/investigate-api/security-information-for-a-domain-1/
+def get_security_info(token, domain):
+    ok, response = umbrella_get(token, "/security/name/" + domain +  ".json")
+    return ok, response
 
 # get_domain_score
 # https://docs.umbrella.com/developer/investigate-api/domain-scores-1/
@@ -55,47 +60,72 @@ def get_domains_by_email(token, email):
     ok, response =  umbrella_get(token, "/whois/emails/" + email)
     return ok, response
 
+
 # below we gather scores by parsing the data from the investigate primatives. 
 def score_from_categories(token, domain):
     ok, response = get_domain_categories(token, domain)
-    if ok:
-        categories =  response[domain]["security_categories"]
-        for c in categories:
-            print c
-            if c == "Malware" or c == "Phishing" or c == "Botnet" or c == "Suspicious":
-                return ok, 50        
-        else:
-            return ok, 0
-    return ok, response
+    if not ok:
+        return ok, response
 
-   
+    categories =  response[domain]["security_categories"]
+    for c in categories:
+        print c
+        if c == "Malware" or c == "Phishing" or c == "Botnet" or c == "Suspicious":
+            return ok, 50        
+    return ok, 0
+
+def when_created_score(created): 
+    from datetime import datetime
+    created_date = datetime.now()
+    if created != None:
+        created_date = datetime.strptime(created, '%Y-%m-%d')
+    present = datetime.now()
+    time_delta = present - created_date
+    if time_delta < 365:
+        return 20
+    return 0
+
 # check_number_of_emails calls get_domains_by_email then returns the count 
-def score_from_emails(token, email):
+def score_from_whois(token, domain):
+    who_score = 0
+    ok, r = get_domain_whois(token, domain)
+    if not ok:
+        return ok, r
+    # get email     
     ok, r = get_domains_by_email(token, email)
-    if ok:
-        if len(r[email]["domains"]) == 1:
-            return 30
-        else:
-            return 0
+    if not ok:
+        return ok, r
+
+    # if only one domain registered to this email, probably proxy
+    # don't trust it
+    emails = whois_info["emails"]
+    if len(r[email]["domains"]) == 1:
+        who_score += 50
+    # domain list is greater than 1, so let's check other registered domains.
     else:
-        return r
+        
+         
+    
+
+    # check if created time 
+    who_score += when_created_score(whois_info["created"])
+    return ok, who_score
    
 # check_fake_news takes API token and a website.  The algorithm is pretty
 # crude and can be modified by you.  
 def check_fake_news(token, domain):
     score = 0
-    # Is the domain associated with a known security category (malware, phishing, botnet)? 
-    # if yes, score=score+50 
+    # goet score from categories
     ok, s = score_from_categories(token, domain)
-    if not ok:
-        return cats
-    score += s
-    return score
-
-    ok, s = score_from_domain_share(token, domain)
     if not ok:
         return s
     score += s
+    # get domain share score
+    ok, s = score_from_whois(token, domain)
+    if not ok:
+        return s
+    score += s
+    return score
     
 
     ok, whois_info = get_domain_whois(token, domain)
@@ -109,20 +139,18 @@ def check_fake_news(token, domain):
         if e_count > max_emails:
             max_emails = e_count
             max_admin = e
-    created = whois_info["created"]
-    from datetime import datetime
-  
-    created_date = datetime.now()
-    if created != None:
-        created_date = datetime.strptime(created, '%Y-%m-%d')
-    present = datetime.now()
-    time_delta = present - created_date
     msg = "domain %s was registered %d days ago.\n" % (domain, time_delta.days)
     msg2 = "domain %s has %d other domains registered by %s" % (domain, max_emails, max_admin)
     return msg + msg2
 
+## for testing, not required for code. 
 import sys 
 import json
+import os
+token = os.environ.get('UMBRELLA_TOKEN')
+if token == None:
+    print "please define UMBRELLA_TOKEN environment variable"
+    sys.exit(1)
 if len(sys.argv) > 1:
     print check_fake_news(token, sys.argv[1])
 else:
