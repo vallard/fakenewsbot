@@ -1,3 +1,14 @@
+
+def check_domain(domain):
+    import re
+    pref = re.compile(r'http[s]*://')
+    d = re.sub(r'http[s]*://', '', domain)
+    print d
+    regexp = re.compile(r'[a-zA-Z\d-]{,63}(\.[a-zA-Z\d-]{,63})*')
+    if regexp.match(d):
+        return d
+    return ""
+
 # spark_handler is the starting point of our application.  Pipeline calls this function and executes
 # whenever your bot is called.  
 def spark_handler(post_data, message):
@@ -9,8 +20,13 @@ def spark_handler(post_data, message):
 
     # Get the last value and see if its fake news. 
     d = message.text.split(" ")[-1] 
-    spark.messages.create(roomId=room_id, text="Checking on domain: " + d + "...")
-    spark.messages.create(roomId=room_id, text=check_fake_news(token, d))
+    d = check_domain(d)
+    if d != "":
+        spark.messages.create(roomId=room_id, text="Checking on domain: " + d + "...")
+        spark.messages.create(roomId=room_id, text=check_fake_news(token, message.text.split(" ")[-1]))
+    else: 
+        spark.messages.create(roomId=room_id, text="Please give me a domain to see if its fake news!")
+        
 
 # get our database of fake news sites.
 def fakenews_get():
@@ -74,6 +90,8 @@ def get_domain_whois(token, domain):
 def get_domains_by_email(token, email):
     ok, response =  umbrella_get(token, "/whois/emails/" + email)
     return ok, response
+
+
 
 # below we gather scores by parsing the data from the investigate primatives. 
 def score_from_categories(token, domain):
@@ -142,6 +160,8 @@ def score_from_security(token, domain):
     if page_rank < 3:
         return ok, 10
     return ok, 0
+    
+
  
 # check_fake_news takes API token and a website.  The algorithm is pretty
 # crude and can be modified by you.  
